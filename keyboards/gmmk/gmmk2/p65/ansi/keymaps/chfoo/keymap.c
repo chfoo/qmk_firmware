@@ -37,10 +37,14 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 
 #define CAPS_LOCK_INDEX 30
+#define SCROLL_LOCK_INDEX 26
+#define NUM_LOCK_INDEX 26
 static bool blinker_on = false;
 
 void process_blink_timer(void);
 void indicate_caps_lock(void);
+void indicate_scroll_lock(void);
+void indicate_num_lock(void);
 void indicate_layers_active(uint8_t led_min, uint8_t led_max);
 void indicate_set_layer_color(int index, uint8_t layer);
 
@@ -49,6 +53,8 @@ void housekeeping_task_user(void) {
 }
 
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
+  indicate_num_lock();
+  indicate_scroll_lock();
   indicate_caps_lock();
   indicate_layers_active(led_min, led_max);
 
@@ -66,15 +72,32 @@ void process_blink_timer(void) {
 }
 
 void indicate_caps_lock(void) {
-  if (host_keyboard_led_state().caps_lock) {
-    if (g_led_config.flags[CAPS_LOCK_INDEX] & LED_FLAG_KEYLIGHT) {
-      if (blinker_on) {
-        rgb_matrix_set_color(CAPS_LOCK_INDEX, RGB_GREEN);
-      } else {
-        uint8_t val = rgb_matrix_get_val();
-        rgb_matrix_set_color(CAPS_LOCK_INDEX, val, val, val);
-      }
+  if (host_keyboard_led_state().caps_lock
+  && g_led_config.flags[CAPS_LOCK_INDEX] & LED_FLAG_KEYLIGHT) {
+    if (blinker_on) {
+      rgb_matrix_set_color(CAPS_LOCK_INDEX, RGB_GREEN);
+    } else {
+      uint8_t val = rgb_matrix_get_val();
+      rgb_matrix_set_color(CAPS_LOCK_INDEX, val, val, val);
     }
+  }
+}
+
+void indicate_scroll_lock(void) {
+  if (host_keyboard_led_state().scroll_lock
+  && g_led_config.flags[SCROLL_LOCK_INDEX] & LED_FLAG_KEYLIGHT
+  && get_highest_layer(layer_state) == 1
+  && blinker_on) {
+    rgb_matrix_set_color(SCROLL_LOCK_INDEX, RGB_GREEN);
+  }
+}
+
+void indicate_num_lock(void) {
+  if (host_keyboard_led_state().num_lock
+  && g_led_config.flags[NUM_LOCK_INDEX] & LED_FLAG_KEYLIGHT
+  && get_highest_layer(layer_state) == 2
+  && blinker_on) {
+    rgb_matrix_set_color(NUM_LOCK_INDEX, RGB_BLUE);
   }
 }
 
@@ -85,8 +108,9 @@ void indicate_layers_active(uint8_t led_min, uint8_t led_max) {
     for (uint8_t col = 0; col < MATRIX_COLS; ++col) {
       uint8_t index = g_led_config.matrix_co[row][col];
 
-      if (index >= led_min && index < led_max && index != NO_LED &&
-      keymap_key_to_keycode(layer, (keypos_t){col,row}) > KC_TRNS) {
+      if (index >= led_min && index < led_max
+      && index != NO_LED
+      && keymap_key_to_keycode(layer, (keypos_t){col,row}) > KC_TRNS) {
         indicate_set_layer_color(index, layer);
       }
     }
@@ -95,20 +119,37 @@ void indicate_layers_active(uint8_t led_min, uint8_t led_max) {
 
 void indicate_set_layer_color(int index, uint8_t layer) {
   uint8_t val = rgb_matrix_get_val();
+  uint8_t r = 0;
+  uint8_t g = 0;
+  uint8_t b = 0;
 
   switch (layer) {
     case 0:
       break;
     case 1:
-      rgb_matrix_set_color(index, 0x00 * val / 0xff, 0xCE * val / 0xff, 0xD1 * val / 0xff);
+      r = 0x00;
+      g = 0xCE;
+      b = 0xD1;
       break;
     case 2:
-      rgb_matrix_set_color(index, 0x40 * val / 0xff, 0xE0 * val / 0xff, 0xD0 * val / 0xff);
+      r = 0x40;
+      g = 0xE0;
+      b = 0xD0;
       break;
     case 3:
-      rgb_matrix_set_color(index, 0x7F * val / 0xff, 0xFF * val / 0xff, 0xD4 * val / 0xff);
+      r = 0x7F;
+      g = 0xFF;
+      b = 0xD4;
       break;
     default:
       break;
+  }
+
+  r = r * val / 0xff;
+  g = g * val / 0xff;
+  b = b * val / 0xff;
+
+  if (r != 0 || g != 0 || b != 0) {
+    rgb_matrix_set_color(index, r, g, b);
   }
 }
