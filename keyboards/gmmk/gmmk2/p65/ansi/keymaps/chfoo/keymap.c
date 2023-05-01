@@ -45,6 +45,7 @@ void process_blink_timer(void);
 void indicate_caps_lock(void);
 void indicate_scroll_lock(void);
 void indicate_num_lock(void);
+void set_rgb_matrix_lock_indicator(uint8_t index);
 void indicate_layers_active(uint8_t led_min, uint8_t led_max);
 void indicate_set_layer_color(int index, uint8_t layer);
 
@@ -74,30 +75,29 @@ void process_blink_timer(void) {
 void indicate_caps_lock(void) {
   if (host_keyboard_led_state().caps_lock
   && g_led_config.flags[CAPS_LOCK_INDEX] & LED_FLAG_KEYLIGHT) {
-    if (blinker_on) {
-      rgb_matrix_set_color(CAPS_LOCK_INDEX, RGB_GREEN);
-    } else {
-      uint8_t val = rgb_matrix_get_val();
-      rgb_matrix_set_color(CAPS_LOCK_INDEX, val, val, val);
-    }
+    set_rgb_matrix_lock_indicator(CAPS_LOCK_INDEX);
   }
 }
 
 void indicate_scroll_lock(void) {
   if (host_keyboard_led_state().scroll_lock
   && g_led_config.flags[SCROLL_LOCK_INDEX] & LED_FLAG_KEYLIGHT
-  && get_highest_layer(layer_state) == 1
-  && blinker_on) {
-    rgb_matrix_set_color(SCROLL_LOCK_INDEX, RGB_GREEN);
+  && get_highest_layer(layer_state) == 1) {
+    set_rgb_matrix_lock_indicator(SCROLL_LOCK_INDEX);
   }
 }
 
 void indicate_num_lock(void) {
   if (host_keyboard_led_state().num_lock
   && g_led_config.flags[NUM_LOCK_INDEX] & LED_FLAG_KEYLIGHT
-  && get_highest_layer(layer_state) == 2
-  && blinker_on) {
-    rgb_matrix_set_color(NUM_LOCK_INDEX, RGB_BLUE);
+  && get_highest_layer(layer_state) == 2) {
+    set_rgb_matrix_lock_indicator(NUM_LOCK_INDEX);
+  }
+}
+
+void set_rgb_matrix_lock_indicator(uint8_t index) {
+  if (blinker_on) {
+    rgb_matrix_set_color(index, RGB_GREEN);
   }
 }
 
@@ -118,38 +118,33 @@ void indicate_layers_active(uint8_t led_min, uint8_t led_max) {
 }
 
 void indicate_set_layer_color(int index, uint8_t layer) {
-  uint8_t val = rgb_matrix_get_val();
-  uint8_t r = 0;
-  uint8_t g = 0;
-  uint8_t b = 0;
+  HSV color = {
+    rgb_matrix_get_hue() + 0x7f,
+    rgb_matrix_get_sat(),
+    rgb_matrix_get_val()
+  };
 
   switch (layer) {
     case 0:
-      break;
+      return;
     case 1:
-      r = 0x00;
-      g = 0xCE;
-      b = 0xD1;
+      color.s = 255;
       break;
     case 2:
-      r = 0x40;
-      g = 0xE0;
-      b = 0xD0;
+      color.h -= 10;
+      color.s = 255;
       break;
     case 3:
-      r = 0x7F;
-      g = 0xFF;
-      b = 0xD4;
+      color.h -= 20;
+      color.s = 255;
       break;
     default:
-      break;
+      return;
   }
 
-  r = r * val / 0xff;
-  g = g * val / 0xff;
-  b = b * val / 0xff;
+  uint8_t current_val = rgb_matrix_get_val();
+  color.v = MIN(color.v, current_val);
 
-  if (r != 0 || g != 0 || b != 0) {
-    rgb_matrix_set_color(index, r, g, b);
-  }
+  RGB rgb_color = hsv_to_rgb(color);
+  rgb_matrix_set_color(index, rgb_color.r, rgb_color.g, rgb_color.b);
 }
