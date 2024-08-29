@@ -43,7 +43,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 #define CAPS_LOCK_INDEX 30
 #define SCROLL_LOCK_INDEX 26
 #define NUM_LOCK_INDEX 26
-static bool blinker_on = false;
+static uint8_t blinker_state = 0;
 
 void process_blink_timer(void);
 void indicate_caps_lock(void);
@@ -58,10 +58,10 @@ void housekeeping_task_user(void) {
 }
 
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
-  indicate_num_lock();
+  indicate_layers_active(led_min, led_max);
+  // indicate_num_lock();
   indicate_scroll_lock();
   indicate_caps_lock();
-  indicate_layers_active(led_min, led_max);
 
   return false;
 }
@@ -70,9 +70,9 @@ void process_blink_timer(void) {
   uint16_t time = timer_read();
 
   if (((time >> 10) & 1) == 1) {
-    blinker_on = true;
+    blinker_state = 2;
   } else {
-    blinker_on = false;
+    blinker_state = 1;
   }
 }
 
@@ -100,8 +100,10 @@ void indicate_num_lock(void) {
 }
 
 void set_rgb_matrix_lock_indicator(uint8_t index) {
-  if (blinker_on) {
+  if (blinker_state == 2) {
     rgb_matrix_set_color(index, RGB_GREEN);
+  } else if (blinker_state == 1) {
+    rgb_matrix_set_color(index, 0, 128, 0);
   }
 }
 
@@ -113,6 +115,11 @@ void indicate_layers_active(uint8_t led_min, uint8_t led_max) {
       uint8_t index = g_led_config.matrix_co[row][col];
 
       if (index >= led_min && index < led_max
+      && index != NO_LED
+      && host_keyboard_led_state().num_lock
+      && keymap_key_to_keycode(layer, (keypos_t){col,row}) == KC_NUM_LOCK) {
+        set_rgb_matrix_lock_indicator(index);
+      } else if (index >= led_min && index < led_max
       && index != NO_LED
       && keymap_key_to_keycode(layer, (keypos_t){col,row}) > KC_TRNS) {
         indicate_set_layer_color(index, layer);

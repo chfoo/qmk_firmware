@@ -27,4 +27,4 @@
 #define AW20216S_EN_PIN C13
 
 // Custom:
-#define RGB_MATRIX_TIMEOUT 120000 // number of milliseconds to wait until rgb automatically turns off
+#define RGB_MATRIX_TIMEOUT 300000 // number of milliseconds to wait until rgb automatically turns off
