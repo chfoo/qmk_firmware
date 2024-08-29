@@ -45,11 +45,13 @@
 #define REG_MOTION_BURST   0x63
 // clang-format on
 
+static bool powered_down = false;
+
 void adns5050_init(void) {
     // Initialize the ADNS serial pins.
-    setPinOutput(ADNS5050_SCLK_PIN);
-    setPinOutput(ADNS5050_SDIO_PIN);
-    setPinOutput(ADNS5050_CS_PIN);
+    gpio_set_pin_output(ADNS5050_SCLK_PIN);
+    gpio_set_pin_output(ADNS5050_SDIO_PIN);
+    gpio_set_pin_output(ADNS5050_CS_PIN);
 
     // reboot the adns.
     // if the adns hasn't initialized yet, this is harmless.
@@ -58,6 +60,8 @@ void adns5050_init(void) {
     // wait maximum time before adns is ready.
     // this ensures that the adns is actuall ready after reset.
     wait_ms(55);
+
+    powered_down = false;
 
     // read a burst from the adns and then discard it.
     // gets the adns ready for write commands
@@ -69,30 +73,30 @@ void adns5050_init(void) {
 // Just as with the serial protocol, this is used by the slave to send a
 // synchronization signal to the master.
 void adns5050_sync(void) {
-    writePinLow(ADNS5050_CS_PIN);
+    gpio_write_pin_low(ADNS5050_CS_PIN);
     wait_us(1);
-    writePinHigh(ADNS5050_CS_PIN);
+    gpio_write_pin_high(ADNS5050_CS_PIN);
 }
 
 void adns5050_cs_select(void) {
-    writePinLow(ADNS5050_CS_PIN);
+    gpio_write_pin_low(ADNS5050_CS_PIN);
 }
 
 void adns5050_cs_deselect(void) {
-    writePinHigh(ADNS5050_CS_PIN);
+    gpio_write_pin_high(ADNS5050_CS_PIN);
 }
 
 uint8_t adns5050_serial_read(void) {
-    setPinInput(ADNS5050_SDIO_PIN);
+    gpio_set_pin_input(ADNS5050_SDIO_PIN);
     uint8_t byte = 0;
 
     for (uint8_t i = 0; i < 8; ++i) {
-        writePinLow(ADNS5050_SCLK_PIN);
+        gpio_write_pin_low(ADNS5050_SCLK_PIN);
         wait_us(1);
 
-        byte = (byte << 1) | readPin(ADNS5050_SDIO_PIN);
+        byte = (byte << 1) | gpio_read_pin(ADNS5050_SDIO_PIN);
 
-        writePinHigh(ADNS5050_SCLK_PIN);
+        gpio_write_pin_high(ADNS5050_SCLK_PIN);
         wait_us(1);
     }
 
@@ -100,19 +104,19 @@ uint8_t adns5050_serial_read(void) {
 }
 
 void adns5050_serial_write(uint8_t data) {
-    setPinOutput(ADNS5050_SDIO_PIN);
+    gpio_set_pin_output(ADNS5050_SDIO_PIN);
 
     for (int8_t b = 7; b >= 0; b--) {
-        writePinLow(ADNS5050_SCLK_PIN);
+        gpio_write_pin_low(ADNS5050_SCLK_PIN);
 
         if (data & (1 << b))
-            writePinHigh(ADNS5050_SDIO_PIN);
+            gpio_write_pin_high(ADNS5050_SDIO_PIN);
         else
-            writePinLow(ADNS5050_SDIO_PIN);
+            gpio_write_pin_low(ADNS5050_SDIO_PIN);
 
         wait_us(2);
 
-        writePinHigh(ADNS5050_SCLK_PIN);
+        gpio_write_pin_high(ADNS5050_SCLK_PIN);
     }
 
     // tSWR. See page 15 of the ADNS spec sheet.
@@ -163,6 +167,10 @@ report_adns5050_t adns5050_read_burst(void) {
     data.dx = 0;
     data.dy = 0;
 
+    if (powered_down) {
+        return data;
+    }
+
     adns5050_serial_write(REG_MOTION_BURST);
 
     // We don't need a minimum tSRAD here. That's because a 4ms wait time is
@@ -210,4 +218,11 @@ bool adns5050_check_signature(void) {
     uint8_t pid2 = adns5050_read_reg(REG_PRODUCT_ID2);
 
     return (pid == 0x12 && rid == 0x01 && pid2 == 0x26);
+}
+
+void adns5050_power_down(void) {
+    if (!powered_down) {
+        powered_down = true;
+        adns5050_write_reg(REG_MOUSE_CONTROL, 0b10);
+    }
 }
